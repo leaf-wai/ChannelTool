@@ -23,7 +23,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +36,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import channeltool.shared.generated.resources.Res
 import channeltool.shared.generated.resources.channeltool_icon
 import com.leaf.channeltool.model.ApkChannelInfo
@@ -48,6 +48,7 @@ import com.leaf.channeltool.platform.createChannelToolService
 import com.leaf.channeltool.platform.createDesktopBridge
 import com.leaf.channeltool.platform.desktopFileDropTarget
 import com.leaf.channeltool.ui.AppPage
+import com.leaf.channeltool.ui.ChannelToolEffect
 import com.leaf.channeltool.ui.ChannelToolUiState
 import com.leaf.channeltool.ui.ChannelToolViewModel
 import com.leaf.channeltool.ui.InspectionUiState
@@ -98,7 +99,7 @@ fun App() {
             desktopBridge = createDesktopBridge(),
         )
     }
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
     val colors = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()
 
     MiuixTheme(colors = colors) {
@@ -112,10 +113,11 @@ private fun ChannelToolScreen(
     viewModel: ChannelToolViewModel,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
-    state.message?.let { message ->
-        LaunchedEffect(message.id) {
-            snackbarHostState.showSnackbar(message.text)
-            viewModel.consumeMessage(message.id)
+    LaunchedEffect(viewModel) {
+        viewModel.effects.collect { effect ->
+            when (effect) {
+                is ChannelToolEffect.ShowMessage -> snackbarHostState.showSnackbar(effect.text)
+            }
         }
     }
 
@@ -144,8 +146,27 @@ private fun ChannelToolScreen(
                 .consumeWindowInsets(contentPadding),
         ) {
             when (state.page) {
-                AppPage.Packaging -> PackagingPage(state.packaging, viewModel)
-                AppPage.Inspection -> InspectionPage(state.inspection, viewModel)
+                AppPage.Packaging -> PackagingPage(
+                    state = state.packaging,
+                    onChooseBaseApk = viewModel::chooseBaseApk,
+                    onBaseApkDropped = viewModel::useDroppedBaseApk,
+                    onChooseOutputDirectory = viewModel::chooseOutputDirectory,
+                    onOutputDirectoryDropped = viewModel::useDroppedOutputDirectory,
+                    onImportChannelFile = viewModel::importChannelFile,
+                    onChannelTextChanged = viewModel::updateChannelText,
+                    onFastModeChanged = viewModel::updateFastMode,
+                    onOverwriteChanged = viewModel::updateOverwrite,
+                    onStartPackaging = viewModel::startPackaging,
+                    onCancelPackaging = viewModel::cancelPackaging,
+                    onOpenOutputDirectory = viewModel::openOutputDirectory,
+                )
+                AppPage.Inspection -> InspectionPage(
+                    state = state.inspection,
+                    onChooseApk = viewModel::chooseInspectionApk,
+                    onApkDropped = viewModel::useDroppedInspectionApk,
+                    onInspectAgain = viewModel::inspectAgain,
+                    onCopyChannel = viewModel::copyEffectiveChannel,
+                )
             }
         }
     }
@@ -328,7 +349,17 @@ private fun BottomNavigation(
 @Composable
 private fun PackagingPage(
     state: PackagingUiState,
-    viewModel: ChannelToolViewModel,
+    onChooseBaseApk: () -> Unit,
+    onBaseApkDropped: (List<String>) -> Unit,
+    onChooseOutputDirectory: () -> Unit,
+    onOutputDirectoryDropped: (List<String>) -> Unit,
+    onImportChannelFile: () -> Unit,
+    onChannelTextChanged: (String) -> Unit,
+    onFastModeChanged: (Boolean) -> Unit,
+    onOverwriteChanged: (Boolean) -> Unit,
+    onStartPackaging: () -> Unit,
+    onCancelPackaging: () -> Unit,
+    onOpenOutputDirectory: () -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -349,11 +380,11 @@ private fun PackagingPage(
             PathSelector(
                 value = state.baseApkPath,
                 placeholder = "尚未选择 APK",
-                buttonLabel = "选择 APK",
+                buttonLabel = "选择APK",
                 icon = { Icon(MiuixIcons.Regular.File, contentDescription = null) },
                 enabled = !state.isRunning,
-                onClick = viewModel::chooseBaseApk,
-                onFilesDropped = viewModel::useDroppedBaseApk,
+                onClick = onChooseBaseApk,
+                onFilesDropped = onBaseApkDropped,
             )
         }
         item {
@@ -365,8 +396,8 @@ private fun PackagingPage(
                 buttonLabel = "选择目录",
                 icon = { Icon(MiuixIcons.Regular.Folder, contentDescription = null) },
                 enabled = !state.isRunning,
-                onClick = viewModel::chooseOutputDirectory,
-                onFilesDropped = viewModel::useDroppedOutputDirectory,
+                onClick = onChooseOutputDirectory,
+                onFilesDropped = onOutputDirectoryDropped,
             )
         }
         item {
@@ -383,18 +414,18 @@ private fun PackagingPage(
                     )
                 }
                 Button(
-                    onClick = viewModel::importChannelFile,
+                    onClick = onImportChannelFile,
                     enabled = !state.isRunning,
                 ) {
                     Icon(MiuixIcons.Regular.Import, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("导入 TXT")
+                    Text("导入TXT")
                 }
             }
             Spacer(Modifier.height(10.dp))
             TextField(
                 value = state.channelText,
-                onValueChange = viewModel::updateChannelText,
+                onValueChange = onChannelTextChanged,
                 modifier = Modifier.fillMaxWidth().height(156.dp),
                 label = "xiaomi\nhuawei\noppo\nvivo",
                 useLabelAsPlaceholder = true,
@@ -422,7 +453,11 @@ private fun PackagingPage(
             }
         }
         item {
-            OptionsBand(state, viewModel)
+            OptionsBand(
+                state = state,
+                onFastModeChanged = onFastModeChanged,
+                onOverwriteChanged = onOverwriteChanged,
+            )
         }
         item {
             Row(
@@ -435,7 +470,7 @@ private fun PackagingPage(
             ) {
                 if (state.isRunning) {
                     Button(
-                        onClick = viewModel::cancelPackaging,
+                        onClick = onCancelPackaging,
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColorsPrimary(),
                     ) {
@@ -445,7 +480,7 @@ private fun PackagingPage(
                     }
                 } else {
                     Button(
-                        onClick = viewModel::startPackaging,
+                        onClick = onStartPackaging,
                         modifier = Modifier.weight(1f),
                         enabled = state.canStart,
                         colors = ButtonDefaults.buttonColorsPrimary(),
@@ -456,7 +491,7 @@ private fun PackagingPage(
                     }
                 }
                 Button(
-                    onClick = viewModel::openOutputDirectory,
+                    onClick = onOpenOutputDirectory,
                     modifier = Modifier.weight(1f),
                     enabled = state.outputDirectory.isNotBlank() && !state.isRunning,
                 ) {
@@ -496,7 +531,8 @@ private fun PackagingPage(
 @Composable
 private fun OptionsBand(
     state: PackagingUiState,
-    viewModel: ChannelToolViewModel,
+    onFastModeChanged: (Boolean) -> Unit,
+    onOverwriteChanged: (Boolean) -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -511,7 +547,7 @@ private fun OptionsBand(
             summary = "跳过生成后的强校验",
             checked = state.fastMode,
             enabled = !state.isRunning,
-            onCheckedChange = viewModel::updateFastMode,
+            onCheckedChange = onFastModeChanged,
             modifier = Modifier.weight(1f),
         )
         OptionSwitch(
@@ -519,7 +555,7 @@ private fun OptionsBand(
             summary = "成功生成后替换旧渠道包",
             checked = state.overwriteExisting,
             enabled = !state.isRunning,
-            onCheckedChange = viewModel::updateOverwrite,
+            onCheckedChange = onOverwriteChanged,
             modifier = Modifier.weight(1f),
         )
     }
@@ -615,7 +651,10 @@ private fun StatusIndicator(status: PackagingItemStatus) {
 @Composable
 private fun InspectionPage(
     state: InspectionUiState,
-    viewModel: ChannelToolViewModel,
+    onChooseApk: () -> Unit,
+    onApkDropped: (List<String>) -> Unit,
+    onInspectAgain: () -> Unit,
+    onCopyChannel: () -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -633,12 +672,12 @@ private fun InspectionPage(
             Spacer(Modifier.height(8.dp))
             PathSelector(
                 value = state.apkPath,
-                placeholder = "尚未选择 APK",
-                buttonLabel = "选择 APK",
+                placeholder = "尚未选择APK",
+                buttonLabel = "选择APK",
                 icon = { Icon(MiuixIcons.Regular.File, contentDescription = null) },
                 enabled = !state.isLoading,
-                onClick = viewModel::chooseInspectionApk,
-                onFilesDropped = viewModel::useDroppedInspectionApk,
+                onClick = onChooseApk,
+                onFilesDropped = onApkDropped,
             )
         }
         if (state.isLoading) {
@@ -657,14 +696,14 @@ private fun InspectionPage(
                         Text("读取失败", fontWeight = FontWeight.SemiBold)
                         Text(error, color = MiuixTheme.colorScheme.onErrorContainer)
                     }
-                    IconButton(onClick = viewModel::inspectAgain) {
+                    IconButton(onClick = onInspectAgain) {
                         Icon(MiuixIcons.Regular.Refresh, contentDescription = "重新读取")
                     }
                 }
             }
         }
         state.info?.let { info ->
-            item { ChannelResult(info, viewModel::copyEffectiveChannel) }
+            item { ChannelResult(info, onCopyChannel) }
             item { ApkDetails(info) }
         }
     }

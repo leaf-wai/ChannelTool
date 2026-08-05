@@ -13,10 +13,13 @@ import com.leaf.channeltool.model.PackagingRequest
 import com.leaf.channeltool.platform.ChannelToolService
 import com.leaf.channeltool.platform.DesktopBridge
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -25,10 +28,9 @@ enum class AppPage(val title: String) {
     Inspection("渠道查询"),
 }
 
-data class UserMessage(
-    val id: Long,
-    val text: String,
-)
+sealed interface ChannelToolEffect {
+    data class ShowMessage(val text: String) : ChannelToolEffect
+}
 
 data class PackagingUiState(
     val baseApkPath: String = "",
@@ -49,7 +51,9 @@ data class PackagingUiState(
             channelIssues.isEmpty()
 
     val completedCount: Int
-        get() = results.count { it.status !in setOf(PackagingItemStatus.Pending, PackagingItemStatus.Processing) }
+        get() = results.count {
+            it.status != PackagingItemStatus.Pending && it.status != PackagingItemStatus.Processing
+        }
 }
 
 data class InspectionUiState(
@@ -64,7 +68,6 @@ data class ChannelToolUiState(
     val defaultPage: AppPage = AppPage.Packaging,
     val packaging: PackagingUiState = PackagingUiState(),
     val inspection: InspectionUiState = InspectionUiState(),
-    val message: UserMessage? = null,
 )
 
 class ChannelToolViewModel(
@@ -73,9 +76,10 @@ class ChannelToolViewModel(
 ) : ViewModel() {
     private val _state = MutableStateFlow(ChannelToolUiState())
     val state: StateFlow<ChannelToolUiState> = _state.asStateFlow()
+    private val _effects = Channel<ChannelToolEffect>(Channel.BUFFERED)
+    val effects: Flow<ChannelToolEffect> = _effects.receiveAsFlow()
 
     private var packagingJob: Job? = null
-    private var messageId = 0L
 
     init {
         viewModelScope.launch {
@@ -86,7 +90,9 @@ class ChannelToolViewModel(
     }
 
     fun selectPage(page: AppPage) {
-        _state.update { it.copy(page = page) }
+        _state.update { current ->
+            if (current.page == page) current else current.copy(page = page)
+        }
     }
 
     fun setCurrentPageAsDefault() {
@@ -101,15 +107,20 @@ class ChannelToolViewModel(
     }
 
     fun updateChannelText(text: String) {
+        if (_state.value.packaging.channelText == text) return
         val parsed = parseChannelText(text)
         updatePackaging {
             it.copy(channelText = text, channels = parsed.channels, channelIssues = parsed.issues)
         }
     }
 
-    fun updateFastMode(enabled: Boolean) = updatePackaging { it.copy(fastMode = enabled) }
+    fun updateFastMode(enabled: Boolean) = updatePackaging { current ->
+        if (current.fastMode == enabled) current else current.copy(fastMode = enabled)
+    }
 
-    fun updateOverwrite(enabled: Boolean) = updatePackaging { it.copy(overwriteExisting = enabled) }
+    fun updateOverwrite(enabled: Boolean) = updatePackaging { current ->
+        if (current.overwriteExisting == enabled) current else current.copy(overwriteExisting = enabled)
+    }
 
     fun chooseBaseApk() {
         viewModelScope.launch {
@@ -264,12 +275,6 @@ class ChannelToolViewModel(
         }
     }
 
-    fun consumeMessage(messageId: Long) {
-        _state.update { current ->
-            if (current.message?.id == messageId) current.copy(message = null) else current
-        }
-    }
-
     private fun setBaseApk(path: String) {
         updatePackaging {
             it.copy(
@@ -308,11 +313,14 @@ class ChannelToolViewModel(
     }
 
     private inline fun updatePackaging(transform: (PackagingUiState) -> PackagingUiState) {
-        _state.update { it.copy(packaging = transform(it.packaging)) }
+        _state.update { current ->
+            val packaging = transform(current.packaging)
+            if (packaging == current.packaging) current else current.copy(packaging = packaging)
+        }
     }
 
     private fun showMessage(text: String) {
-        _state.update { it.copy(message = UserMessage(++messageId, text)) }
+        _effects.trySend(ChannelToolEffect.ShowMessage(text))
     }
 
     private suspend fun <T> bridgeAction(fallback: String, action: suspend () -> T): T? =

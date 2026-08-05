@@ -10,6 +10,7 @@ import com.leaf.channeltool.platform.ChannelToolService
 import com.leaf.channeltool.platform.DesktopBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -85,7 +86,8 @@ class ChannelToolViewModelTest {
 
         assertEquals(AppPage.Packaging.name, bridge.defaultPage)
         assertEquals(AppPage.Packaging, viewModel.state.value.defaultPage)
-        assertTrue(viewModel.state.value.message?.text?.contains("渠道打包") == true)
+        val effect = viewModel.effects.first() as ChannelToolEffect.ShowMessage
+        assertTrue(effect.text.contains("渠道打包"))
     }
 
     @Test
@@ -112,7 +114,8 @@ class ChannelToolViewModelTest {
         advanceUntilIdle()
 
         assertTrue(viewModel.state.value.packaging.baseApkPath.isEmpty())
-        assertTrue(viewModel.state.value.message?.text?.contains("只拖入一个") == true)
+        val effect = viewModel.effects.first() as ChannelToolEffect.ShowMessage
+        assertTrue(effect.text.contains("只拖入一个"))
     }
 }
 
