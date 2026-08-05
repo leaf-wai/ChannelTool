@@ -9,7 +9,7 @@ ChannelTool 是一个基于 Compose Multiplatform、[miuix](https://github.com/c
 - 支持粘贴渠道列表或导入 UTF-8 TXT 文件
 - 支持完整校验、快速模式、同名文件保护和任务取消
 - 查询单个 APK 的有效渠道、V1/V2 渠道与签名方案
-- 支持 macOS DMG 和 Windows MSI 分发
+- 支持 macOS DMG 和 Windows 绿色免安装 ZIP 分发
 
 渠道包默认输出到基础 APK 同级的 `channel-output` 目录，命名格式为：
 
@@ -31,11 +31,11 @@ ChannelTool 是一个基于 Compose Multiplatform、[miuix](https://github.com/c
 # 在 macOS 上生成 DMG
 ./gradlew :desktopApp:packageDmg
 
-# 在 Windows 上生成 MSI
-gradlew.bat :desktopApp:packageMsi
+# 在 Windows 上生成绿色免安装包
+gradlew.bat :desktopApp:packagePortableWindows
 ```
 
-Compose Desktop 的原生安装包只能在对应操作系统上构建，因此 MSI 需要在 Windows 主机验证。
+Windows 产物位于 `desktopApp/build/compose/binaries/main/portable/ChannelTool-1.0.0-windows.zip`，解压后直接运行其中的 `ChannelTool/ChannelTool.exe`。Compose Desktop 的原生运行时只能在对应操作系统上构建，因此绿色版 ZIP 仍需在 Windows 主机生成和验证。
 
 ## 渠道文件
 
