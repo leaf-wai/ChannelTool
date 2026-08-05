@@ -2,6 +2,7 @@ package com.leaf.channeltool
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -45,6 +46,7 @@ import com.leaf.channeltool.model.PackagingItemResult
 import com.leaf.channeltool.model.PackagingItemStatus
 import com.leaf.channeltool.platform.createChannelToolService
 import com.leaf.channeltool.platform.createDesktopBridge
+import com.leaf.channeltool.platform.desktopFileDropTarget
 import com.leaf.channeltool.ui.AppPage
 import com.leaf.channeltool.ui.ChannelToolUiState
 import com.leaf.channeltool.ui.ChannelToolViewModel
@@ -68,6 +70,7 @@ import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.Check
 import top.yukonga.miuix.kmp.icon.basic.Close
@@ -82,6 +85,7 @@ import top.yukonga.miuix.kmp.icon.extended.Pin
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
+import top.yukonga.miuix.kmp.theme.LocalContentColor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.darkColorScheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme
@@ -194,7 +198,7 @@ private fun AppTopBar(
                         tint = if (isCurrentPageDefault) {
                             MiuixTheme.colorScheme.onPrimaryContainer
                         } else {
-                            MiuixTheme.colorScheme.onBackgroundVariant
+                            LocalContentColor.current
                         },
                     )
                 }
@@ -349,6 +353,7 @@ private fun PackagingPage(
                 icon = { Icon(MiuixIcons.Regular.File, contentDescription = null) },
                 enabled = !state.isRunning,
                 onClick = viewModel::chooseBaseApk,
+                onFilesDropped = viewModel::useDroppedBaseApk,
             )
         }
         item {
@@ -361,6 +366,7 @@ private fun PackagingPage(
                 icon = { Icon(MiuixIcons.Regular.Folder, contentDescription = null) },
                 enabled = !state.isRunning,
                 onClick = viewModel::chooseOutputDirectory,
+                onFilesDropped = viewModel::useDroppedOutputDirectory,
             )
         }
         item {
@@ -632,6 +638,7 @@ private fun InspectionPage(
                 icon = { Icon(MiuixIcons.Regular.File, contentDescription = null) },
                 enabled = !state.isLoading,
                 onClick = viewModel::chooseInspectionApk,
+                onFilesDropped = viewModel::useDroppedInspectionApk,
             )
         }
         if (state.isLoading) {
@@ -763,16 +770,38 @@ private fun PathSelector(
     icon: @Composable () -> Unit,
     enabled: Boolean,
     onClick: () -> Unit,
+    onFilesDropped: (List<String>) -> Unit,
 ) {
+    var isDragActive by remember { mutableStateOf(false) }
+
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .desktopFileDropTarget(
+                enabled = enabled,
+                onFilesDropped = onFilesDropped,
+                onDragActiveChange = { isDragActive = it },
+            ),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         TextField(
             value = value,
             onValueChange = {},
-            modifier = Modifier.weight(1f).height(56.dp),
+            modifier = Modifier
+                .weight(1f)
+                .height(56.dp)
+                .then(
+                    if (isDragActive) {
+                        Modifier.border(
+                            width = 2.dp,
+                            color = MiuixTheme.colorScheme.primary,
+                            shape = RoundedCornerShape(TextFieldDefaults.CornerRadius),
+                        )
+                    } else {
+                        Modifier
+                    },
+                ),
             label = placeholder,
             useLabelAsPlaceholder = true,
             readOnly = true,

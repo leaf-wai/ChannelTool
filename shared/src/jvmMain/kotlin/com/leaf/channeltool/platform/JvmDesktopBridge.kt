@@ -31,6 +31,14 @@ internal class JvmDesktopBridge : DesktopBridge {
         preferences.flush()
     }
 
+    override suspend fun isRegularFile(path: String): Boolean = withContext(Dispatchers.IO) {
+        Files.isRegularFile(Path.of(path))
+    }
+
+    override suspend fun isDirectory(path: String): Boolean = withContext(Dispatchers.IO) {
+        Files.isDirectory(Path.of(path))
+    }
+
     override suspend fun chooseApk(): String? = showFileDialog(
         title = "选择基础 APK",
         extensions = setOf("apk"),

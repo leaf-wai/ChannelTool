@@ -87,6 +87,33 @@ class ChannelToolViewModelTest {
         assertEquals(AppPage.Packaging, viewModel.state.value.defaultPage)
         assertTrue(viewModel.state.value.message?.text?.contains("渠道打包") == true)
     }
+
+    @Test
+    fun droppedPathsPopulatePackagingInputs() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val viewModel = ChannelToolViewModel(FakeService(), FakeDesktopBridge())
+
+        viewModel.useDroppedBaseApk(listOf("/tmp/base.apk"))
+        advanceUntilIdle()
+        assertEquals("/tmp/base.apk", viewModel.state.value.packaging.baseApkPath)
+        assertEquals("/tmp/channel-output", viewModel.state.value.packaging.outputDirectory)
+
+        viewModel.useDroppedOutputDirectory(listOf("/tmp/custom-output"))
+        advanceUntilIdle()
+        assertEquals("/tmp/custom-output", viewModel.state.value.packaging.outputDirectory)
+    }
+
+    @Test
+    fun droppingMultipleFilesIsRejected() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val viewModel = ChannelToolViewModel(FakeService(), FakeDesktopBridge())
+
+        viewModel.useDroppedBaseApk(listOf("/tmp/one.apk", "/tmp/two.apk"))
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.packaging.baseApkPath.isEmpty())
+        assertTrue(viewModel.state.value.message?.text?.contains("只拖入一个") == true)
+    }
 }
 
 private class FakeService : ChannelToolService {
@@ -123,6 +150,9 @@ private class FakeDesktopBridge(
     override suspend fun writeDefaultPage(page: String) {
         defaultPage = page
     }
+
+    override suspend fun isRegularFile(path: String): Boolean = path.endsWith(".apk", ignoreCase = true)
+    override suspend fun isDirectory(path: String): Boolean = !path.endsWith(".apk", ignoreCase = true)
 
     override suspend fun chooseApk(): String? = apk
     override suspend fun chooseChannelFile(): String? = null

@@ -117,12 +117,44 @@ class ChannelToolViewModel(
         }
     }
 
+    fun useDroppedBaseApk(paths: List<String>) {
+        if (_state.value.packaging.isRunning) return
+        viewModelScope.launch {
+            val path = singleDroppedPath(paths, "APK 文件") ?: return@launch
+            if (!path.endsWith(".apk", ignoreCase = true)) {
+                showMessage("请拖入 APK 文件")
+                return@launch
+            }
+            val isFile = bridgeAction("无法读取拖入的 APK") { desktopBridge.isRegularFile(path) } ?: return@launch
+            if (!isFile) {
+                showMessage("请拖入有效的 APK 文件")
+                return@launch
+            }
+            setBaseApk(path)
+            showMessage("已载入拖入的 APK")
+        }
+    }
+
     fun chooseOutputDirectory() {
         viewModelScope.launch {
             val initial = _state.value.packaging.outputDirectory.ifBlank { null }
             bridgeAction("无法选择输出目录") { desktopBridge.chooseDirectory(initial) }?.let { path ->
                 updatePackaging { it.copy(outputDirectory = path) }
             }
+        }
+    }
+
+    fun useDroppedOutputDirectory(paths: List<String>) {
+        if (_state.value.packaging.isRunning) return
+        viewModelScope.launch {
+            val path = singleDroppedPath(paths, "输出目录") ?: return@launch
+            val isDirectory = bridgeAction("无法读取拖入的目录") { desktopBridge.isDirectory(path) } ?: return@launch
+            if (!isDirectory) {
+                showMessage("请拖入文件夹作为输出目录")
+                return@launch
+            }
+            updatePackaging { it.copy(outputDirectory = path) }
+            showMessage("已设置输出目录")
         }
     }
 
@@ -202,6 +234,23 @@ class ChannelToolViewModel(
         }
     }
 
+    fun useDroppedInspectionApk(paths: List<String>) {
+        if (_state.value.inspection.isLoading) return
+        viewModelScope.launch {
+            val path = singleDroppedPath(paths, "APK 文件") ?: return@launch
+            if (!path.endsWith(".apk", ignoreCase = true)) {
+                showMessage("请拖入 APK 文件")
+                return@launch
+            }
+            val isFile = bridgeAction("无法读取拖入的 APK") { desktopBridge.isRegularFile(path) } ?: return@launch
+            if (!isFile) {
+                showMessage("请拖入有效的 APK 文件")
+                return@launch
+            }
+            inspectApk(path)
+        }
+    }
+
     fun inspectAgain() {
         val path = _state.value.inspection.apkPath
         if (path.isNotBlank()) viewModelScope.launch { inspectApk(path) }
@@ -229,6 +278,12 @@ class ChannelToolViewModel(
                 results = emptyList(),
             )
         }
+    }
+
+    private fun singleDroppedPath(paths: List<String>, expected: String): String? {
+        if (paths.size == 1) return paths.single()
+        showMessage("请只拖入一个$expected")
+        return null
     }
 
     private suspend fun inspectApk(path: String) {

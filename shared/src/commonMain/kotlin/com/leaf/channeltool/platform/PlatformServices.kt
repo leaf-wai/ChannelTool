@@ -16,6 +16,8 @@ interface ChannelToolService {
 interface DesktopBridge {
     suspend fun readDefaultPage(): String?
     suspend fun writeDefaultPage(page: String)
+    suspend fun isRegularFile(path: String): Boolean
+    suspend fun isDirectory(path: String): Boolean
     suspend fun chooseApk(): String?
     suspend fun chooseChannelFile(): String?
     suspend fun chooseDirectory(initialDirectory: String?): String?
