@@ -1,0 +1,130 @@
+name: Build and release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to build, for example 1.0.0
+        required: true
+        default: 1.0.0
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Resolve version
+        id: version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            version="$INPUT_VERSION"
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version must use MAJOR.MINOR.PATCH format: $version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Run tests
+        run: ./gradlew :shared:jvmTest :desktopApp:compileKotlin
+
+  macos:
+    needs: [metadata, test]
+    runs-on: macos-15
+    env:
+      CHANNELTOOL_VERSION: ${{ needs.metadata.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build macOS DMG
+        run: ./gradlew :desktopApp:packageDmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ChannelTool-macOS
+          path: desktopApp/build/compose/binaries/main/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+  windows:
+    needs: [metadata, test]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            java-arch: x64
+            artifact-arch: x64
+          - runner: windows-11-arm
+            java-arch: aarch64
+            artifact-arch: arm64
+    runs-on: ${{ matrix.runner }}
+    env:
+      CHANNELTOOL_VERSION: ${{ needs.metadata.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          architecture: ${{ matrix.java-arch }}
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build portable Windows package
+        run: .\gradlew.bat :desktopApp:packagePortableWindows
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ChannelTool-Windows-${{ matrix.artifact-arch }}
+          path: desktopApp/build/compose/binaries/main/portable/*-windows-${{ matrix.artifact-arch }}.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [metadata, macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ChannelTool-*
+          path: dist
+          merge-multiple: true
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* \
+              --title "ChannelTool $RELEASE_VERSION" \
+              --generate-notes \
+              --verify-tag
+          fi

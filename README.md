@@ -35,7 +35,26 @@ ChannelTool 是一个基于 Compose Multiplatform、[miuix](https://github.com/c
 gradlew.bat :desktopApp:packagePortableWindows
 ```
 
-Windows 产物位于 `desktopApp/build/compose/binaries/main/portable/ChannelTool-1.0.0-windows.zip`，解压后直接运行其中的 `ChannelTool/ChannelTool.exe`。Compose Desktop 的原生运行时只能在对应操作系统上构建，因此绿色版 ZIP 仍需在 Windows 主机生成和验证。
+Windows 产物位于 `desktopApp/build/compose/binaries/main/portable/ChannelTool-版本-windows-架构.zip`，解压后直接运行其中的 `ChannelTool/ChannelTool.exe`。Compose Desktop 的原生运行时只能在对应操作系统上构建，因此绿色版 ZIP 仍需在对应架构的 Windows 主机生成和验证。
+
+## GitHub Actions 分发
+
+`.github/workflows/release.yml` 会执行测试并分别生成：
+
+- `ChannelTool-版本.dmg`
+- `ChannelTool-版本-windows-x64.zip`
+- `ChannelTool-版本-windows-arm64.zip`
+
+在 GitHub 的 Actions 页面手动运行 `Build and release` 时，填写 `MAJOR.MINOR.PATCH` 格式的版本号，三个产物会作为 Workflow Artifacts 保存 14 天。
+
+推送版本标签会自动创建 GitHub Release：
+
+```shell
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Windows ARM64 构建使用 GitHub 的标准 `windows-11-arm` Runner，macOS 构建使用 ARM64 `macos-14` Runner。当前 macOS 构建未配置 Apple Developer ID 签名和公证，下载后可能触发 Gatekeeper 提示；正式对外分发时应在仓库 Secrets 中配置 Apple 签名凭据并增加公证步骤。
 
 ## 渠道文件
 

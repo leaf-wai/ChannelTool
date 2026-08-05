@@ -8,8 +8,16 @@ plugins {
 }
 
 val channelToolName = "ChannelTool"
-val channelToolVersion = "1.0.0"
+val channelToolVersion = providers.gradleProperty("channelToolVersion")
+    .orElse(providers.environmentVariable("CHANNELTOOL_VERSION"))
+    .orElse("1.0.0")
+    .get()
 val isWindowsHost = System.getProperty("os.name").startsWith("Windows", ignoreCase = true)
+val windowsArchitecture = when (System.getProperty("os.arch").lowercase()) {
+    "aarch64", "arm64" -> "arm64"
+    "amd64", "x86_64", "x64" -> "x64"
+    else -> System.getProperty("os.arch").lowercase()
+}
 
 dependencies {
     implementation(project(":shared"))
@@ -32,6 +40,7 @@ compose.desktop {
 
             macOS {
                 iconFile.set(project.file("src/main/resources/channeltool-icon.icns"))
+                minimumSystemVersion = "13.0"
                 infoPlist {
                     extraKeysRawXml = """
                         <key>CFBundleLocalizations</key>
@@ -58,7 +67,7 @@ val packagePortableWindows by tasks.registering(Zip::class) {
         into(channelToolName)
     }
     destinationDirectory.set(layout.buildDirectory.dir("compose/binaries/main/portable"))
-    archiveFileName.set("$channelToolName-$channelToolVersion-windows.zip")
+    archiveFileName.set("$channelToolName-$channelToolVersion-windows-$windowsArchitecture.zip")
 }
 
 tasks.matching { it.name == "packageDistributionForCurrentOS" }.configureEach {
