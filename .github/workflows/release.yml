@@ -128,3 +128,4 @@ jobs:
               --generate-notes \
               --verify-tag
           fi
+
