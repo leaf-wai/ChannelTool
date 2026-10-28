@@ -37,6 +37,8 @@ compose.desktop {
             targetFormats(TargetFormat.Dmg)
             packageName = channelToolName
             packageVersion = channelToolVersion
+            licenseFile.set(rootProject.file("LICENSE"))
+            appResourcesRootDir.set(project.layout.projectDirectory.dir("src/main/distribution-resources"))
 
             macOS {
                 iconFile.set(project.file("src/main/resources/channeltool-icon.icns"))
@@ -66,6 +68,8 @@ val packagePortableWindows by tasks.registering(Zip::class) {
     from(layout.buildDirectory.dir("compose/binaries/main/app/$channelToolName")) {
         into(channelToolName)
     }
+    from(rootProject.file("LICENSE"))
+    from(project.file("src/main/distribution-resources/common"))
     destinationDirectory.set(layout.buildDirectory.dir("compose/binaries/main/portable"))
     archiveFileName.set("$channelToolName-$channelToolVersion-windows-$windowsArchitecture.zip")
 }

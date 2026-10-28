@@ -63,3 +63,7 @@ TXT 文件使用 UTF-8 编码，每行一个渠道。空行和完全重复的渠
 ## 测试资产
 
 `shared/src/jvmTest/resources/fixtures` 中的 APK 只包含测试载荷，由一次性测试证书生成，用于验证 VasDolly 的 V1/V2 写入和读取。私钥不包含在项目中。
+
+## 许可证
+
+ChannelTool 自身代码采用 MIT License，详见 [LICENSE](LICENSE)。发行包还包含第三方开源组件；其许可声明见 [THIRD_PARTY_NOTICES.txt](desktopApp/src/main/distribution-resources/THIRD_PARTY_NOTICES.txt)。第三方组件继续适用各自的许可证。
