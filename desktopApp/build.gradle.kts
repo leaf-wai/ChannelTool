@@ -63,10 +63,10 @@ val packagePortableWindows by tasks.registering(Zip::class) {
     group = "distribution"
     description = "Builds a portable Windows ZIP containing ChannelTool.exe and its runtime."
     dependsOn("createDistributable")
-    onlyIf("Portable Windows distributions can only be built on Windows") { isWindowsHost }
+    enabled = isWindowsHost
 
     from(layout.buildDirectory.dir("compose/binaries/main/app/$channelToolName")) {
-        into(channelToolName)
+        into("ChannelTool")
     }
     from(rootProject.file("LICENSE"))
     from(project.file("src/main/distribution-resources/common"))

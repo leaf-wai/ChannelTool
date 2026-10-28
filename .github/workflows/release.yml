@@ -94,7 +94,7 @@ jobs:
           architecture: ${{ matrix.java-arch }}
       - uses: gradle/actions/setup-gradle@v4
       - name: Build portable Windows package
-        run: .\gradlew.bat :desktopApp:packagePortableWindows
+        run: .\gradlew.bat --console=plain :desktopApp:packagePortableWindows
       - uses: actions/upload-artifact@v4
         with:
           name: ChannelTool-Windows-${{ matrix.artifact-arch }}
